@@ -144,5 +144,27 @@ void SysTick_Handler(void)
 
 /* USER CODE BEGIN 1 */
 
+/**
+  * Brief   This function handles USARTx Instance interrupt request.
+  * Param   None
+  * Retval  None
+  */
+void USART3_4_LPUART1_IRQHandler(void)
+{
+  /* Check RXNE flag value in ISR register */
+  if(LL_USART_IsActiveFlag_RXNE(USART3) && LL_USART_IsEnabledIT_RXNE(USART3))
+  {
+    /* RXNE flag will be cleared by reading of RDR register (done in call) */
+    /* Call function in charge of handling Character reception */
+    USART_CharReception_Callback();
+  }
+  else
+  {
+    /* Call Error function */
+    Error_Callback();
+  }
+
+}
+
 /* USER CODE END 1 */
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
