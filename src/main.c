@@ -98,12 +98,14 @@ int main(void)
   LL_IOP_GRP1_EnableClock(LL_IOP_GRP1_PERIPH_GPIOB);
   
   LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_TIM3);
+  LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_TIM2);
   
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   /* USER CODE BEGIN 2 */
   
+  // RED LED
   LL_GPIO_InitTypeDef GPIO_InitStruct;
   GPIO_InitStruct.Pin = LL_GPIO_PIN_0;
   GPIO_InitStruct.Mode = LL_GPIO_MODE_OUTPUT;
@@ -114,6 +116,7 @@ int main(void)
   
   LL_GPIO_Init(GPIOB, &GPIO_InitStruct);
   
+  // SERVO Driver Timer3
   GPIO_InitStruct.Pin = LL_GPIO_PIN_6;
   GPIO_InitStruct.Mode = LL_GPIO_MODE_ALTERNATE;
   GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_HIGH;
@@ -144,28 +147,117 @@ int main(void)
   
   LL_TIM_EnableCounter(TIM3);
 
+  // H-Bridge input A/B
+//   LL_GPIO_InitTypeDef GPIO_InitStruct;
+  GPIO_InitStruct.Pin = LL_GPIO_PIN_4;
+  GPIO_InitStruct.Mode = LL_GPIO_MODE_OUTPUT;
+  GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
+  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
+  GPIO_InitStruct.Alternate = LL_GPIO_AF_0;
+  
+  LL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  
+  GPIO_InitStruct.Pin = LL_GPIO_PIN_5;
+  
+  LL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  
+  LL_GPIO_SetOutputPin(GPIOB, LL_GPIO_PIN_4);
+  LL_GPIO_ResetOutputPin(GPIOB, LL_GPIO_PIN_5);
+  
+  // PWM for main motor driver Timer2  
+  GPIO_InitStruct.Pin = LL_GPIO_PIN_5;
+  GPIO_InitStruct.Mode = LL_GPIO_MODE_ALTERNATE;
+  GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_HIGH;
+  GPIO_InitStruct.Alternate = LL_GPIO_AF_2;
+  
+  LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  
+//   LL_TIM_InitTypeDef TIM_InitStruct;
+  TIM_InitStruct.Prescaler = 15;            // 64MHz clock / (15 +1) = 4MHz tick frequency
+  TIM_InitStruct.CounterMode = LL_TIM_COUNTERMODE_UP;
+  TIM_InitStruct.Autoreload = 399;          // 400 * 250ns = 100us / 10kHz; PWM max is 20kHz for the H bridge
+  TIM_InitStruct.ClockDivision = LL_TIM_CLOCKDIVISION_DIV1;
+  TIM_InitStruct.RepetitionCounter = 0;
+  
+  LL_TIM_Init(TIM2, &TIM_InitStruct);
+  
+//   LL_TIM_OC_InitTypeDef TIM_OC_InitStruct;
+  TIM_OC_InitStruct.OCMode = LL_TIM_OCMODE_PWM1;
+  TIM_OC_InitStruct.OCState = LL_TIM_OCSTATE_ENABLE;
+  TIM_OC_InitStruct.OCNState = LL_TIM_OCSTATE_DISABLE;
+  TIM_OC_InitStruct.CompareValue = 199;         // half scale to start with
+  TIM_OC_InitStruct.OCPolarity = LL_TIM_OCPOLARITY_HIGH;
+  TIM_OC_InitStruct.OCNPolarity = LL_TIM_OCPOLARITY_LOW;
+  TIM_OC_InitStruct.OCIdleState = LL_TIM_OCIDLESTATE_LOW;
+  TIM_OC_InitStruct.OCNIdleState = LL_TIM_OCIDLESTATE_HIGH;
+  
+  LL_TIM_OC_Init(TIM2, LL_TIM_CHANNEL_CH1, &TIM_OC_InitStruct);
+  
+  LL_TIM_EnableCounter(TIM2);
+
   Configure_USART();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  
+  uint16_t speed = 0;
+  int dir = 1;
   while (1)
   {
     /* USER CODE END WHILE */
     
-    for(volatile int i=0;i<640000;i++) {;}
+    /* PWM main motor demo... */
+    for(volatile int i=0;i<32000;i++) {;}
     
-    if(pos_idx == 15)
+    if(dir == 1)
     {
-        shift = -1;
+        if(speed < 399)
+        {
+            speed ++;
+        }
+        else
+        {
+            dir = -1;
+        }
     }
-    else if(pos_idx == 0)
+    else
     {
-        shift = 1;
+        if(speed > 0)
+        {
+            speed --;
+        }
+        else
+        {
+            dir = 1;
+            // also change direction fwd/reverse
+            LL_GPIO_TogglePin(GPIOB, LL_GPIO_PIN_4);
+            LL_GPIO_TogglePin(GPIOB, LL_GPIO_PIN_5);
+            
+            // and blink the LED
+            LL_GPIO_TogglePin(GPIOB, LL_GPIO_PIN_0);
+            
+            // move the servo a bit
+            if(pos_idx == 15)
+            {
+                shift = -1;
+            }
+            else if(pos_idx == 0)
+            {
+                shift = 1;
+            }
+            pos_idx += shift;
+        }
     }
-    pos_idx += shift;
+    LL_TIM_OC_SetCompareCH1(TIM2, speed);
+    /* end main motor demo */
+    
+    /* Servo demo */
+//     for(volatile int i=0;i<640000;i++) {;}
+    
     LL_TIM_OC_SetCompareCH1(TIM3, servo_pos[pos_idx]);
-    LL_GPIO_TogglePin(GPIOB, LL_GPIO_PIN_0);
+//     LL_GPIO_TogglePin(GPIOB, LL_GPIO_PIN_0);
 
     /* USER CODE BEGIN 3 */
   }
