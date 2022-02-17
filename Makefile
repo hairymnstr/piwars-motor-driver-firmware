@@ -20,7 +20,8 @@ LDFLAGS		+= -Wl,--start-group -lc -lgcc -Wl,--end-group \
 BUILD_DIR	=  build/
 OBJ_FILES	+= src/main.o src/startup_stm32g071rbtx.o \
 		   src/stm32g0xx_it.o src/syscalls.o src/sysmem.o \
-		   src/system_stm32g0xx.o
+		   src/system_stm32g0xx.o src/command_handler.o \
+		   src/address.o src/adc_driver.o
 DRIVER_OBJ_FILES = stm32g0xx_ll_adc.o stm32g0xx_ll_comp.o stm32g0xx_ll_crc.o \
 		   stm32g0xx_ll_crs.o stm32g0xx_ll_dac.o stm32g0xx_ll_dma.o \
 		   stm32g0xx_ll_exti.o stm32g0xx_ll_gpio.o stm32g0xx_ll_i2c.o \

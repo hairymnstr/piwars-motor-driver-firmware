@@ -24,6 +24,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+#include "address.h"
+#include "adc_driver.h"
+#include "command_handler.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -116,6 +119,14 @@ int main(void)
   
   LL_GPIO_Init(GPIOB, &GPIO_InitStruct);
   
+  // GREEN LED
+  GPIO_InitStruct.Pin = LL_GPIO_PIN_1;
+  LL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  
+  // Current limit LED on AUX4
+  GPIO_InitStruct.Pin = LL_GPIO_PIN_4;
+  LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  
   // SERVO Driver Timer3
   GPIO_InitStruct.Pin = LL_GPIO_PIN_6;
   GPIO_InitStruct.Mode = LL_GPIO_MODE_ALTERNATE;
@@ -186,7 +197,7 @@ int main(void)
   TIM_OC_InitStruct.OCMode = LL_TIM_OCMODE_PWM1;
   TIM_OC_InitStruct.OCState = LL_TIM_OCSTATE_ENABLE;
   TIM_OC_InitStruct.OCNState = LL_TIM_OCSTATE_DISABLE;
-  TIM_OC_InitStruct.CompareValue = 199;         // half scale to start with
+  TIM_OC_InitStruct.CompareValue = 0;         // stopped to start with
   TIM_OC_InitStruct.OCPolarity = LL_TIM_OCPOLARITY_HIGH;
   TIM_OC_InitStruct.OCNPolarity = LL_TIM_OCPOLARITY_LOW;
   TIM_OC_InitStruct.OCIdleState = LL_TIM_OCIDLESTATE_LOW;
@@ -196,7 +207,11 @@ int main(void)
   
   LL_TIM_EnableCounter(TIM2);
 
+  address_init();
+  adc_driver_init();
+  
   Configure_USART();
+  Configure_485_USART();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -208,56 +223,56 @@ int main(void)
   {
     /* USER CODE END WHILE */
     
-    /* PWM main motor demo... */
-    for(volatile int i=0;i<32000;i++) {;}
-    
-    if(dir == 1)
-    {
-        if(speed < 399)
-        {
-            speed ++;
-        }
-        else
-        {
-            dir = -1;
-        }
-    }
-    else
-    {
-        if(speed > 0)
-        {
-            speed --;
-        }
-        else
-        {
-            dir = 1;
-            // also change direction fwd/reverse
-            LL_GPIO_TogglePin(GPIOB, LL_GPIO_PIN_4);
-            LL_GPIO_TogglePin(GPIOB, LL_GPIO_PIN_5);
-            
-            // and blink the LED
-            LL_GPIO_TogglePin(GPIOB, LL_GPIO_PIN_0);
-            
-            // move the servo a bit
-            if(pos_idx == 15)
-            {
-                shift = -1;
-            }
-            else if(pos_idx == 0)
-            {
-                shift = 1;
-            }
-            pos_idx += shift;
-        }
-    }
-    LL_TIM_OC_SetCompareCH1(TIM2, speed);
-    /* end main motor demo */
-    
-    /* Servo demo */
-//     for(volatile int i=0;i<640000;i++) {;}
-    
-    LL_TIM_OC_SetCompareCH1(TIM3, servo_pos[pos_idx]);
-//     LL_GPIO_TogglePin(GPIOB, LL_GPIO_PIN_0);
+//     /* PWM main motor demo... */
+//     for(volatile int i=0;i<32000;i++) {;}
+//     
+//     if(dir == 1)
+//     {
+//         if(speed < 399)
+//         {
+//             speed ++;
+//         }
+//         else
+//         {
+//             dir = -1;
+//         }
+//     }
+//     else
+//     {
+//         if(speed > 0)
+//         {
+//             speed --;
+//         }
+//         else
+//         {
+//             dir = 1;
+//             // also change direction fwd/reverse
+//             LL_GPIO_TogglePin(GPIOB, LL_GPIO_PIN_4);
+//             LL_GPIO_TogglePin(GPIOB, LL_GPIO_PIN_5);
+//             
+//             // and blink the LED
+//             LL_GPIO_TogglePin(GPIOB, LL_GPIO_PIN_0);
+//             
+//             // move the servo a bit
+//             if(pos_idx == 15)
+//             {
+//                 shift = -1;
+//             }
+//             else if(pos_idx == 0)
+//             {
+//                 shift = 1;
+//             }
+//             pos_idx += shift;
+//         }
+//     }
+//     LL_TIM_OC_SetCompareCH1(TIM2, speed);
+//     /* end main motor demo */
+//     
+//     /* Servo demo */
+    for(volatile int i=0;i<640000;i++) {;}
+//     
+//     LL_TIM_OC_SetCompareCH1(TIM3, servo_pos[pos_idx]);
+    LL_GPIO_TogglePin(GPIOB, LL_GPIO_PIN_0);
 
     /* USER CODE BEGIN 3 */
   }
@@ -351,6 +366,7 @@ void Configure_USART(void)
   
   USART_InitStruct.PrescalerValue = LL_USART_PRESCALER_DIV1;
   USART_InitStruct.BaudRate = 115200;
+  USART_InitStruct.DataWidth = LL_USART_DATAWIDTH_9B;
   USART_InitStruct.StopBits = LL_USART_STOPBITS_1;
   USART_InitStruct.Parity = LL_USART_PARITY_NONE;
   USART_InitStruct.TransferDirection = LL_USART_DIRECTION_TX_RX;
@@ -370,6 +386,84 @@ void Configure_USART(void)
   LL_USART_EnableIT_ERROR(USART3);
 }
 
+void Configure_485_USART(void)
+{
+
+  /* (1) Enable GPIO clock and configures the USART pins *********************/
+
+  /* Enable the peripheral clock of GPIO Port */
+  LL_IOP_GRP1_EnableClock(LL_IOP_GRP1_PERIPH_GPIOA);
+
+  /* Configure Tx Pin as : Alternate function, High Speed, Push pull, Pull up */
+  LL_GPIO_InitTypeDef GPIO_InitStruct;
+  GPIO_InitStruct.Pin = LL_GPIO_PIN_9;
+  GPIO_InitStruct.Mode = LL_GPIO_MODE_ALTERNATE;
+  GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_HIGH;
+  GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
+  GPIO_InitStruct.Pull = LL_GPIO_PULL_UP;
+  GPIO_InitStruct.Alternate = LL_GPIO_AF_1;
+  
+  LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /* Configure Rx Pin as : Alternate function, High Speed, Push pull, Pull up */
+  GPIO_InitStruct.Pin = LL_GPIO_PIN_10;
+  GPIO_InitStruct.Mode = LL_GPIO_MODE_ALTERNATE;
+  GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_HIGH;
+  GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
+  GPIO_InitStruct.Pull = LL_GPIO_PULL_UP;
+  GPIO_InitStruct.Alternate = LL_GPIO_AF_1;
+  
+  LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /* Configure DE pin as output driving low (read only mode) for now */
+  GPIO_InitStruct.Pin = LL_GPIO_PIN_12;
+  GPIO_InitStruct.Mode = LL_GPIO_MODE_OUTPUT;
+  GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_HIGH;
+  GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
+  GPIO_InitStruct.Pull = LL_GPIO_PULL_DOWN;
+  GPIO_InitStruct.Alternate = LL_GPIO_AF_0;
+  
+  LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  LL_GPIO_ResetOutputPin(GPIOA, LL_GPIO_PIN_12);
+  
+  /* (2) NVIC Configuration for USART interrupts */
+  /*  - Set priority for USARTx_IRQn */
+  /*  - Enable USARTx_IRQn */
+  NVIC_SetPriority(USART1_IRQn, 0);  
+  NVIC_EnableIRQ(USART1_IRQn);
+
+  /* (3) Enable USART peripheral clock and clock source ***********************/
+  LL_APB2_GRP1_EnableClock(LL_APB2_GRP1_PERIPH_USART1);
+
+  /* Set clock source */
+  // not configurable on G071xx
+  LL_RCC_SetUSARTClockSource(LL_RCC_USART1_CLKSOURCE_PCLK1);
+
+  /* (4) Configure USART functional parameters ********************************/
+  
+  LL_USART_InitTypeDef USART_InitStruct = {0};
+  
+  USART_InitStruct.PrescalerValue = LL_USART_PRESCALER_DIV1;
+  USART_InitStruct.BaudRate = 115200;
+  USART_InitStruct.DataWidth = LL_USART_DATAWIDTH_9B;
+  USART_InitStruct.StopBits = LL_USART_STOPBITS_1;
+  USART_InitStruct.Parity = LL_USART_PARITY_NONE;
+  USART_InitStruct.TransferDirection = LL_USART_DIRECTION_TX_RX;
+  USART_InitStruct.HardwareFlowControl = LL_USART_HWCONTROL_NONE;
+  USART_InitStruct.OverSampling = LL_USART_OVERSAMPLING_16;
+  
+  LL_USART_Init(USART1, &USART_InitStruct);
+  LL_USART_Enable(USART1);
+
+  /* Polling USART initialisation */
+  while((!(LL_USART_IsActiveFlag_TEACK(USART1))) || (!(LL_USART_IsActiveFlag_REACK(USART1))))
+  {
+  }
+
+  /* Enable RXNE and Error interrupts */
+  LL_USART_EnableIT_RXNE(USART1);
+//   LL_USART_EnableIT_ERROR(USART1);
+}
 /* USER CODE END 4 */
 
 /**
@@ -386,21 +480,30 @@ void Error_Handler(void)
   /* USER CODE END Error_Handler_Debug */
 }
 
+
+void USART_CharReception_Callback(void)
+{
+    __IO uint32_t received_char;
+    
+    received_char = LL_USART_ReceiveData9(USART3);
+}
+
 /**
   * @brief  Function called from USART IRQ Handler when RXNE flag is set
   *         Function is in charge of reading character received on USART RX line.
   * @param  None
   * @retval None
   */
-void USART_CharReception_Callback(void)
+void USART1_CharReception_Callback(void)
 {
 __IO uint32_t received_char;
 
   /* Read Received character. RXNE flag is cleared by reading of RDR register */
-  received_char = LL_USART_ReceiveData8(USART3);
+  received_char = LL_USART_ReceiveData9(USART1);
+  new_byte(received_char);
 
   /* Echo received character on TX */
-  LL_USART_TransmitData8(USART3, received_char);
+  LL_USART_TransmitData9(USART3, received_char);
 }
 
 /**
